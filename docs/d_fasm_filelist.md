@@ -1,8 +1,7 @@
 # D File List 
  
-Generated: Mon 11/16/2026 13:12:34.20 
+Generated: Mon 11/16/2026 19:58:48.80 
  
-``` 
 D:\PROJECTS\D\D_FASM
 |   ai_startup.md
 |   build.bat
@@ -52,16 +51,18 @@ D:\PROJECTS\D\D_FASM
 |   |   README.md
 |   |   spatial.inc
 |   |   win64_host.inc
+|   |   win64_host_data.inc
 |   |   
 |   \---rune
 |           layout_format.inc
 |           pack_format.inc
 |           rune_bank.inc
+|           rune_bss.inc
 |           rune_constants.inc
+|           rune_data.inc
 |           rune_draw.inc
 |           rune_input.inc
 |           rune_loader.inc
-|           rune_state.inc
 |           
 +---src
 |       app_events.inc
