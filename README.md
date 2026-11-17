@@ -45,9 +45,9 @@ d_fasm\
   build\             d_fasm.exe
   config\            layout_en_us.inc, rune_packs.inc (both GENERATED), config.ini (unused)
   docs\              d_fasm_filelist.md
-  lib\               spatial.inc, draw2d.inc, win64_host.inc
+  lib\               spatial.inc, draw2d.inc, keys.inc, win64_host.inc, win64_host_data.inc
     rune\          all rune code, data declarations, constants, and formats
-  src\               d_fasm.asm (entry point)
+  src\               d_fasm.asm (entry point), app_events.inc (what keys do)
   utils\             make_runes.bat, FileList.bat
     python\          gen_bank0.py, gen_sheets.py, fonts\ (rune generator)
   version\
@@ -59,20 +59,27 @@ file), [`utils\README.md`](utils/README.md) (generator workflow).
 
 ## How it fits together
 
-1. `d_fasm.asm` reads the primary monitor's bounds into `ds_0`, a 32-byte
-   `AREA` record (position x,y,z; size w,h,d; color). Layout is in
-   `lib\spatial.inc`.
-2. It allocates a 32-bit-per-pixel frame buffer of that size and fills it
-   with the surface color.
-3. `LoadRunePacks` reads each pack from `..\assets\`, checks every file is
+1. `d_fasm.asm` asks the host for the primary monitor's bounds
+   (`HostGetPrimaryBounds`) and stores them in `ds_0`, a 32-byte `AREA`
+   record (position x,y,z; size w,h,d; color; layout in `lib\spatial.inc`).
+2. It allocates a 32-bit-per-pixel frame buffer of that size (`pixel_buffer`,
+   owned by the surface, not the host) and fills it with the surface color.
+3. `BuildCoveragePalette` derives the rune palette from `ds_0`'s color.
+   `LoadRunePacks` reads each pack from `..\assets\`, checks every file is
    exactly `count * 1024` bytes, and registers each cell in
    `rune_mask_table[bank*256 + rune]`. Any failure shows an error and exits.
-4. `win64_host.inc` owns the window and presents the buffer with
-   `StretchDIBits`. Nothing outside that file touches an `HWND`.
-5. On a key press, `HandleRuneKey` reads Shift/Ctrl, finds the key in the
-   layout table, picks the bank from the lock keys, and `DrawRuneValue`
-   clears the surface and draws that rune at 8x, centered. An ID with no
-   loaded mask draws the fallback rune (bank 0, ID `0x02`).
+4. `HostCreate` (in `win64_host.inc`) registers the window class and creates
+   the borderless window over `ds_0`; `HostRun` runs the message loop. The
+   host presents the buffer with `StretchDIBits`. It knows nothing about
+   runes or `ds_0` by name: it is handed an `AREA` and a buffer pointer. No
+   other file touches an `HWND`.
+5. On a key press the host calls `AppOnKey` (`src\app_events.inc`) with the
+   virtual-key code. Esc closes the window (`HostClose`). Any other key goes
+   to `HandleRuneKey`, which reads Shift/Ctrl, finds the key in the layout
+   table, picks the bank from the lock keys, and `DrawRuneValue` clears the
+   surface and draws that rune at 8x, centered. An ID with no loaded mask
+   draws the fallback rune (bank 0, ID `0x02`). `AppOnKey` tells the host
+   whether to repaint (`HOST_KEY_*`).
 
 ## Rune ID map (bank 0)
 
@@ -101,7 +108,11 @@ Change a fact in its one home, then rebuild. Do not hand-edit generated files.
 | Pool size | Computed from the pack table; nothing to edit |
 | Which key makes which rune | `write_layout` in `utils\python\gen_bank0.py`, which **generates** `config\layout_en_us.inc` (do not edit the `.inc` by hand) |
 | Bank selection rule | `ReadBank` in `lib\rune\rune_bank.inc` |
-| Rune size on screen (8x), indicator position, key codes | `lib\rune\rune_constants.inc` |
+| Rune size on screen (8x), indicator position, bank count | `lib\rune\rune_constants.inc` |
+| Which keys do what at application level (for example Esc to exit) | `AppOnKey` in `src\app_events.inc` |
+| Host API (create, run, close, key-result codes) | header of `lib\win64_host.inc` |
+| Key codes (`KEY_*`) | `lib\keys.inc` |
+| Section layout and include order | `src\d_fasm.asm` (the only file that declares sections) |
 | Surface geometry and background color | `ds_0` in `src\d_fasm.asm` (the rune palette is derived from this color at startup, so it is the only place to change it) |
 | Key-layout entry format (entry size, field offsets, Shift/Ctrl bits) | `lib\rune\layout_format.inc` (used by `HandleRuneKey` and `write_layout`) |
 | FASM install location | `FASM_INCLUDE` in `build.bat` |
@@ -131,8 +142,10 @@ Change a fact in its one home, then rebuild. Do not hand-edit generated files.
   (the right-hand form is a flipped copy). Runtime mirroring would save 5 KB;
   see "Planned: mirror and rotate" in `src\README.md`.
 - If both Caps and Scroll Lock are on, Scroll Lock wins (temporary rule).
-- Several `.data` sections exist (one per file that declares one). FASM does
-  not merge same-named sections. Harmless.
+- Only `src\d_fasm.asm` declares sections (`.data`, `.bss`, `.text`, `.idata`).
+  Every other file is constants-only, data-only, bss-only, or code-only, and
+  lands in whichever section is open where it is included, so the include
+  order in `d_fasm.asm` matters.
 - Only the primary monitor is used; there is one DisplaySurface.
 
 ## Planned separations (one file, one purpose)
@@ -144,16 +157,21 @@ next. All rune files go in `lib\rune\`.
 1. **Done:** rune files in `lib\rune\`; the rune palette derives from `ds_0`'s
    color (no hard-coded copy); layout entry format constants in
    `layout_format.inc`.
-2. **In progress:** the pack table is generated (`config\rune_packs.inc`);
-   `rune_display.inc` is split into `rune_constants`, `pack_format`,
-   `rune_state`, `rune_loader`, `rune_bank`, `rune_draw`, and `rune_input`.
-3. Host boundary: move window creation and the message loop out of
-   `d_fasm.asm` into the host; the surface owns `pixel_buffer`; the host
-   passes neutral key events to the application instead of calling
-   `HandleRuneKey`; key codes in one file; `d_fasm.asm` owns the section
-   layout (`.data`, `.bss`, `.text`) and the includes stop declaring their
-   own, which also trims the exe.
-4. Later: scaled-mask drawing in `draw2d.inc` with a canvas parameter, one
+2. **Done:** the pack table is generated (`config\rune_packs.inc`);
+   `rune_display.inc` split into `rune_constants`, `pack_format`,
+   `rune_data`, `rune_bss`, `rune_loader`, `rune_bank`, `rune_draw`, and `rune_input`.
+3. **Done:** host boundary. Window creation, the message loop, and monitor
+   detection moved out of `d_fasm.asm` into the host (`HostGetPrimaryBounds`,
+   `HostCreate`, `HostRun`, `HostClose`); the surface owns `pixel_buffer`; the
+   host hands key presses to the application (`AppOnKey` in
+   `src\app_events.inc`) instead of calling `HandleRuneKey`; Esc policy moved
+   to the application; key codes live in `lib\keys.inc`.
+4. **In progress:** section layout. `d_fasm.asm` owns the sections (`.data`,
+   `.bss`, `.text`, `.idata`: four instead of ten) and every include is
+   data-only, bss-only, or code-only. The host and the rune state were split
+   into data and code files, the zero-filled buffers moved to `.bss`, and the
+   generated `.inc` files no longer declare sections.
+5. Later: scaled-mask drawing in `draw2d.inc` with a canvas parameter, one
    shared rune lookup, Python layout data file, arrows module.
 
 ## Not started / deferred
@@ -168,10 +186,11 @@ To keep sessions focused, share only what the task touches:
 
 | Task | Share |
 |------|-------|
-| Drawing and palette | this file, `lib\rune\rune_draw.inc`, `lib\rune\rune_constants.inc`, `lib\rune\rune_state.inc` |
+| Drawing and palette | this file, `lib\rune\rune_draw.inc`, `lib\rune\rune_constants.inc`, `lib\rune\rune_bss.inc` |
 | Key handling and banks | this file, `lib\rune\rune_input.inc`, `lib\rune\rune_bank.inc`, `lib\rune\layout_format.inc`, `config\layout_en_us.inc` |
 | Pack loading | this file, `lib\rune\rune_loader.inc`, `lib\rune\pack_format.inc`, `config\rune_packs.inc` |
-| Window, presentation, input messages | this file, `lib\win64_host.inc`, `src\d_fasm.asm` |
+| Window, presentation, raw input | this file, `lib\win64_host.inc`, `lib\win64_host_data.inc`, `lib\keys.inc`, `src\d_fasm.asm` |
+| What keys do at application level | this file, `src\app_events.inc`, `lib\keys.inc` |
 | Rune shapes, packs, key map | this file, `utils\python\gen_bank0.py`, `utils\python\gen_sheets.py` |
 | Surface geometry, new records | this file, `lib\spatial.inc`, `src\d_fasm.asm` |
 
@@ -188,7 +207,9 @@ Ground rules worth stating at the start of a session:
 
 Add one line per stage as the project moves on.
 
-- **Step 2 of separation (in progress):** pack table generated into `config\rune_packs.inc`; `rune_display.inc` split into seven single-purpose rune files. (completed and tested)
+- **Step 4 of separation (done):** `d_fasm.asm` owns the sections; data, bss, and code files are separate; exe sections 10 to 4.
+- **Step 3 of separation (done):** host boundary: `HostGetPrimaryBounds`/`HostCreate`/`HostRun`/`HostClose` in the host, `AppOnKey` in `src\app_events.inc`, key codes in `lib\keys.inc`, `pixel_buffer` owned by the surface.
+- **Step 2 of separation (done):** pack table generated into `config\rune_packs.inc`; `rune_display.inc` split into seven single-purpose rune files.
 - **Step 1 of separation (done):** rune files in `lib\rune\`, palette derived from `ds_0`, shared layout-format constants.
 - **Current:** single DisplaySurface on the primary monitor; 7 rune packs
   (110 runes); English/US key layer; bank indicator with Caps/Scroll Lock;
