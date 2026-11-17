@@ -4,7 +4,10 @@
 ; and this file never sees the model: it is handed an AREA (position and size) and a frame
 ; buffer pointer, and it passes key presses to the application through AppOnKey.
 ;
-; Needs spatial.inc (AREA offsets) included first. All procs use the Win64 fastcall convention.
+; Needs spatial.inc (AREA offsets) and win64_host_data.inc (constants and data) included first.
+; All procs use the Win64 fastcall convention.
+;
+; Code only; no section directive. Include inside the .text section that d_fasm.asm opens.
 ;
 ;   HostGetPrimaryBounds(area)        fills the AREA's x, y, w, h from the primary monitor.
 ;                                     eax = 1 on success, 0 on failure.
@@ -17,54 +20,6 @@
 ;
 ; The application must provide:
 ;   AppOnKey(virtual_key)             called on every key press. Returns a HOST_KEY_* value.
-
-DIB_RGB_COLORS = 0
-SW_SHOWNORMAL  = 1
-CS_VREDRAW     = 1
-CS_HREDRAW     = 2
-WM_KEYDOWN     = 0x0100
-
-; What AppOnKey returns to the host.
-HOST_KEY_IGNORED = 0        ; not handled: let Windows apply its default
-HOST_KEY_REDRAW  = 1        ; handled: repaint the window
-HOST_KEY_DONE    = 2        ; handled: nothing to repaint (for example the window was closed)
-
-; MONITORINFO layout: cbSize followed by rcMonitor, rcWork, and dwFlags.
-DS_MONITORINFO_LEFT   = 4
-DS_MONITORINFO_TOP    = 8
-DS_MONITORINFO_RIGHT  = 12
-DS_MONITORINFO_BOTTOM = 16
-
-section '.data' data readable writeable
-    wc           WNDCLASSEX sizeof.WNDCLASSEX, CS_VREDRAW or CS_HREDRAW, WindowProc, 0, 0, 0, 0, 0, 0, 0, host_class, 0
-    msg          MSG
-    ps           PAINTSTRUCT
-    hwnd         dq 0
-    hinstance    dq 0
-    host_buffer  dq 0           ; frame buffer to present (owned by the caller)
-    host_w       dd 0           ; its width and height in pixels
-    host_h       dd 0
-
-    align 4
-    monitor_info:
-        dd 40                ; sizeof(MONITORINFO)
-        dd 0, 0, 0, 0        ; rcMonitor: left, top, right, bottom
-        dd 0, 0, 0, 0        ; rcWork
-        dd 0                 ; dwFlags
-
-    align 8
-    bmi:
-        dd 40
-        dd 0          ; width,  filled by HostCreate from the AREA
-        dd 0          ; height, filled by HostCreate from the AREA (negative = top-down)
-        dw 1
-        dw 32
-        dd 0, 0, 0, 0, 0, 0, 0
-
-    align 2
-    host_class   TCHAR 'DHostClass', 0
-
-section '.text' code readable executable
 
 ; Fills the AREA at `area` with the primary monitor's current bounds.
 proc HostGetPrimaryBounds uses rbx, area
