@@ -2,7 +2,7 @@
 ; Everything that puts runes on the DisplaySurface: the coverage palette, scaled mask
 ; drawing, the bank indicator, and drawing the selected rune.
 ;
-; Code only; no section directive. Include after rune_loader.inc, which opens .text.
+; Code only; no section directive. Include inside the .text section that d_fasm.asm opens.
 ;
 ; PLANNED - mirror/rotate: with only 256 IDs per bank, mirrored and rotated variants
 ; (paired brackets, arrows) will eventually need to share one stored mask. DrawRuneValue

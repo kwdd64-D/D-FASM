@@ -19,7 +19,7 @@ RUNE_NAME_CHARS           = 16         ; each pack filename field: 15 chars + NU
 RUNE_PACK_ENTRY_BYTES     = 8 + RUNE_NAME_CHARS * 2
 
 ; Running total of cells across every rune_pack line. The pool is sized from
-; this (see rune_state.inc), so adding or resizing a pack needs no other edit.
+; this (see rune_bss.inc), so adding or resizing a pack needs no other edit.
 rune_pool_cells = 0
 
 ; One loadable pack: first rune ID, number of cells, filename (in ..\assets\).

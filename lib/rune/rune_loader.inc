@@ -1,11 +1,7 @@
 ; File: lib/rune/rune_loader.inc
 ; Loads the rune packs listed in rune_pack_table from ..\assets\ into rune_pool.
 ;
-; CODE SECTION: this file opens the .text section that the rune code files share.
-; rune_bank.inc, rune_draw.inc and rune_input.inc contain no section directive and must
-; be included after this file, so their code lands in the same section.
-
-section '.text' code readable executable
+; Code only; no section directive. Include inside the .text section that d_fasm.asm opens.
 
 ; Loads every pack in rune_pack_table from ..\assets\ (relative to the exe folder),
 ; checks each file is exactly count*1024 bytes, and registers its cells in bank 0.

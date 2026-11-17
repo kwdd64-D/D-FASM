@@ -3,7 +3,7 @@
 ; layout table (config/layout_en_us.inc), and draws the mapped rune. Lock keys refresh
 ; the bank indicator. The table format is defined in layout_format.inc.
 ;
-; Code only; no section directive. Include after rune_loader.inc, which opens .text.
+; Code only; no section directive. Include inside the .text section that d_fasm.asm opens.
 
 ; The generated layout must be a whole number of entries (see layout_format.inc).
 assert (layout_en_us_keys_end - layout_en_us_keys) mod LAYOUT_ENTRY_SIZE = 0
@@ -11,12 +11,12 @@ assert (layout_en_us_keys_end - layout_en_us_keys) mod LAYOUT_ENTRY_SIZE = 0
 proc HandleRuneKey uses rbx rsi r12 r13 r14, virtual_key
     mov ebx, ecx
     xor r12d, r12d                   ; modifier mask built from LAYOUT_MOD_* bits
-    invoke GetKeyState, RUNE_VK_SHIFT
+    invoke GetKeyState, KEY_SHIFT
     test ax, 0x8000
     jz .shift_up
     or r12d, LAYOUT_MOD_SHIFT
 .shift_up:
-    invoke GetKeyState, RUNE_VK_CONTROL
+    invoke GetKeyState, KEY_CONTROL
     test ax, 0x8000
     jz .ctrl_up
     or r12d, LAYOUT_MOD_CTRL
@@ -45,9 +45,9 @@ proc HandleRuneKey uses rbx rsi r12 r13 r14, virtual_key
     jnz .map_loop
 .unhandled:
     ; Lock keys are not runes, but they change the bank: refresh the indicator.
-    cmp ebx, RUNE_VK_CAPITAL
+    cmp ebx, KEY_CAPITAL
     je .lock_key
-    cmp ebx, RUNE_VK_SCROLL
+    cmp ebx, KEY_SCROLL
     je .lock_key
     xor eax, eax
     ret

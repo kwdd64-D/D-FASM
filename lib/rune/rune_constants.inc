@@ -1,15 +1,10 @@
 ; File: lib/rune/rune_constants.inc
 ; Constants shared by the rune files. Constants only: no code, no data.
+; Key codes are not here: they live in lib/keys.inc.
 
 ; How large a rune is drawn on the surface (RUNE_VIEW_SIZE = 32 cells * RUNE_VIEW_SCALE).
 RUNE_VIEW_SCALE   = 8
 RUNE_VIEW_SIZE    = 256
-
-; Win32 virtual-key codes used by the rune files.
-RUNE_VK_SHIFT     = 0x10
-RUNE_VK_CONTROL   = 0x11
-RUNE_VK_CAPITAL   = 0x14
-RUNE_VK_SCROLL    = 0x91
 
 ; Banks and the fallback rune.
 RUNE_BANK_COUNT   = 3
