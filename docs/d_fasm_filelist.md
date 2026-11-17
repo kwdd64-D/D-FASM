@@ -2,6 +2,7 @@
  
 Generated: Mon 11/16/2026 19:58:48.80 
  
+``` 
 D:\PROJECTS\D\D_FASM
 |   ai_startup.md
 |   build.bat
