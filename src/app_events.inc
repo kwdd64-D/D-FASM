@@ -2,7 +2,7 @@
 ; What the application does with events the host passes along. The host (lib/win64_host.inc)
 ; calls AppOnKey on every key press and acts on the HOST_KEY_* value it returns.
 ;
-; Code only; no section directive. Include after lib/rune/rune_loader.inc, which opens .text.
+; Code only; no section directive. Include inside the .text section that d_fasm.asm opens.
 
 ; Esc closes the window. TEMPORARY: a full-surface window has no close control. Remove once a
 ; region provides one. (Alt+F4 also works.) Every other key goes to the rune code, which returns

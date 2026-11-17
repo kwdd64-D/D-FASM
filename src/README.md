@@ -3,11 +3,17 @@
 `d_fasm.asm` is the assembly entry point for the DisplaySurface
 implementation.
 
-At startup it detects the primary monitor's bounds, stores them in one
-`ds_0` descriptor (the `AREA` layout from `lib/spatial.inc`), allocates a
-32-bit-per-pixel frame buffer of the same size, fills it with the
-descriptor's color, loads the rune packs, and hands the buffer to the
-Windows presentation code in `lib/win64_host.inc`.
+At startup it asks the host for the primary monitor's bounds and stores them
+in one `ds_0` descriptor (the `AREA` layout from `lib/spatial.inc`),
+allocates a 32-bit-per-pixel frame buffer of the same size (`pixel_buffer`,
+owned here, not by the host), fills it with the descriptor's color, loads
+the rune packs, then hands the descriptor and buffer to the host
+(`lib/win64_host.inc`) to create the window and run the message loop. The
+entry point makes no Windows window calls itself.
+
+`app_events.inc` holds what the application does with events the host
+passes along: `AppOnKey` handles Esc (close) and forwards every other key to
+the rune code.
 
 `config/config.ini` is retained for upcoming configuration work. The
 assembly does not read it yet.
@@ -21,9 +27,9 @@ d_fasm\
   config\    layout_en_us.inc (GENERATED key map), rune_packs.inc (GENERATED
              pack table), config.ini (not used yet)
   docs\
-  lib\       spatial.inc, draw2d.inc, win64_host.inc
+  lib\       spatial.inc, draw2d.inc, keys.inc, win64_host.inc
     rune\    all rune code, data declarations, and constants (see lib\README.md)
-  src\       d_fasm.asm (this folder)
+  src\       d_fasm.asm, app_events.inc (this folder)
   utils\     FileList.bat; python\ holds the pack generators
               (gen_bank0.py builds the packs and key map; it imports gen_sheets.py)
   version\
@@ -39,28 +45,43 @@ Project includes are relative to this file. FASM's own includes are found
 through the `INCLUDE` path set by `build.bat`.
 
 ```text
-win64w.inc          FASM's Windows x64 definitions
-spatial.inc         AREA field offsets used by ds_0
-win64_host.inc      OS presentation implementation
-draw2d.inc          frame-buffer drawing macro
-layout_format.inc   layout entry format constants           (lib/rune/)
-pack_format.inc     pack table format constants and macro   (lib/rune/)
-rune_constants.inc  constants shared by the rune files      (lib/rune/)
-layout_en_us.inc    GENERATED key-to-rune assignments       (config/)
-rune_packs.inc      GENERATED pack table                    (config/)
-rune_state.inc      rune buffers, palette, mask table, pool (lib/rune/)
-rune_loader.inc     pack loading; opens the shared .text    (lib/rune/)
-rune_bank.inc       active bank from the lock keys          (lib/rune/)
-rune_draw.inc       palette, mask drawing, bank indicator   (lib/rune/)
-rune_input.inc      key press to rune                       (lib/rune/)
+win64w.inc           FASM's Windows x64 definitions
+spatial.inc          AREA field offsets used by ds_0
+keys.inc             Win32 virtual-key codes (KEY_*)
+draw2d.inc           frame-buffer drawing macro
+layout_format.inc    layout entry format constants           (lib/rune/)
+pack_format.inc      pack table format constants and macro   (lib/rune/)
+rune_constants.inc   constants shared by the rune files      (lib/rune/)
+
+section '.data'      (ds_0, strings and buffer pointers are declared in d_fasm.asm itself)
+win64_host_data.inc  host constants and data                 (lib/)
+layout_en_us.inc     GENERATED key-to-rune assignments       (config/)
+rune_packs.inc       GENERATED pack table                    (config/)
+rune_data.inc        rune data with initial values           (lib/rune/)
+
+section '.bss'
+rune_bss.inc         rune buffers, palette, mask table, pool (lib/rune/)
+
+section '.text'
+win64_host.inc       OS window and presentation              (lib/)
+rune_loader.inc      pack loading                            (lib/rune/)
+rune_bank.inc        active bank from the lock keys          (lib/rune/)
+rune_draw.inc        palette, mask drawing, bank indicator   (lib/rune/)
+rune_input.inc       key press to rune                       (lib/rune/)
+app_events.inc       AppOnKey: Esc closes, other keys go to runes (src/)
+start:               entry point (this file)
 ```
 
-`spatial.inc` must be included before the `ds_0` declaration. The formats and
-constants must come before the data that uses them; `rune_state.inc` must come
-after `rune_packs.inc` (the pool is sized from the table); and
-`rune_bank.inc`, `rune_draw.inc`, and `rune_input.inc` must come after
-`rune_loader.inc`, which opens the `.text` section they share. All of these
-must appear before the entry-point code that uses them.
+`d_fasm.asm` is the only file that declares sections. Every include is
+constants-only, data-only, bss-only, or code-only, and lands in the section
+open at that point. FASM cannot reopen a section, so all the data is included
+first, then the reserved space, then the code. Within that:
+
+- constants and formats come before anything that uses them (they sit above
+  the first section);
+- `rune_bss.inc` comes after `config/rune_packs.inc` (the pool is sized from
+  the table's cell total);
+- `spatial.inc` comes before `ds_0` and the host.
 
 ## Rune packs
 
@@ -145,6 +166,8 @@ pool. When storage pressure arrives, the likely steps are:
   and `SHEETS` in `utils\python\gen_bank0.py`, so it is no longer kept in
   sync by hand. The generator also refuses overlapping packs and file names
   too long for the table.
-- Several `.data` sections exist (one per file that declares one). FASM does
-  not merge same-named sections; this works but is cosmetic noise.
+- Done: `d_fasm.asm` owns the section layout (`.data`, `.bss`, `.text`, `.idata`).
+  Previously each file opened its own sections (ten in all), and FASM does not
+  merge same-named ones; the files are now split into data-only, bss-only,
+  and code-only so there are four.
 - Config-file loading is not implemented.

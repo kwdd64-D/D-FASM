@@ -10,6 +10,14 @@ entry start
 include 'win64w.inc'
 include '../lib/spatial.inc'
 include '../lib/keys.inc'
+include '../lib/draw2d.inc'
+include '../lib/rune/layout_format.inc'
+include '../lib/rune/pack_format.inc'
+include '../lib/rune/rune_constants.inc'
+
+; This is the only file that declares sections. Every include below is data-only, bss-only,
+; or code-only, and lands in whichever section is open at that point (.data, then .bss,
+; then .text). FASM cannot reopen a section, so that order is the rule.
  
 section '.data' data readable writeable
     _title        TCHAR 'D', 0
@@ -24,28 +32,32 @@ section '.data' data readable writeable
     ds_0:
         dd 0, 0, 0              ; x, y, z
         dd 0, 0, 1              ; w, h, d
-        dd 0xFF1E1E2E           ; color (dark)
+        dd 0xFF1E1E2E           ; background color 0xFF0B3D2E or 0xFF1E1E2E  
         dd 0                    ; spare
 
     align 8
     buffer_bytes  dq 0          ; w * h * 4
     pixel_buffer  dq 0          ; the frame buffer: owned by this surface, only presented by the host
 
-include '../lib/win64_host.inc'
-include '../lib/draw2d.inc'
-include '../lib/rune/layout_format.inc'
-include '../lib/rune/pack_format.inc'
-include '../lib/rune/rune_constants.inc'
+; --- Initialized data from the other files ---------------------------------------
+include '../lib/win64_host_data.inc'
 include '../config/layout_en_us.inc'
 include '../config/rune_packs.inc'
-include '../lib/rune/rune_state.inc'
+include '../lib/rune/rune_data.inc'
+
+; --- Reserved space: takes no room in the exe file, zero-filled by the loader ---
+section '.bss' data readable writeable
+include '../lib/rune/rune_bss.inc'
+
+; --- Code -------------------------------------------------------------------
+section '.text' code readable executable
+include '../lib/win64_host.inc'
 include '../lib/rune/rune_loader.inc'
 include '../lib/rune/rune_bank.inc'
 include '../lib/rune/rune_draw.inc'
 include '../lib/rune/rune_input.inc'
 include 'app_events.inc'
 
-section '.text' code readable executable
 start:
     sub rsp, 40                 ; shadow space + 16-byte alignment
 
